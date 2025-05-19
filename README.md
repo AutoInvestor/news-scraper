@@ -1,1 +1,1 @@
-# news-scraper
+python -m main

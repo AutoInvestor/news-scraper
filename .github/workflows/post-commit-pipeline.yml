@@ -1,0 +1,129 @@
+name: Commit to Main Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build_test_release:
+    runs-on: ubuntu-22.04
+    outputs:
+      new-version: ${{ (steps.version_increment.outputs.bump != 'none' && steps.calculate_version.outputs.new_version) || '' }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: poetry install --no-interaction --no-root
+
+      - name: Get merged pull request
+        id: get_merged_pr
+        uses: actions-ecosystem/action-get-merged-pull-request@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine version increment
+        id: version_increment
+        run: |
+          LABELS="${{ steps.get_merged_pr.outputs.labels }}"
+          case "$LABELS" in
+            *major*) BUMP="major" ;;
+            *minor*) BUMP="minor" ;;
+            *patch*) BUMP="patch" ;;
+            *)       BUMP="none"
+          esac
+          echo "bump=$BUMP" >> $GITHUB_OUTPUT
+
+      - name: Calculate new version (Semantic Versioning)
+        id: calculate_version
+        if: steps.version_increment.outputs.bump != 'none'
+        run: |
+          LATEST_TAG=$(git tag --sort=-version:refname | head -n 1)
+          if [ -z "$LATEST_TAG" ]; then
+            LATEST_TAG="0.0.0"
+          fi
+
+          IFS='.' read -r major minor patch <<< "$LATEST_TAG"
+          BUMP=${{ steps.version_increment.outputs.bump }}
+          if [ "$BUMP" = "major" ]; then
+            major=$((major + 1))
+            minor=0
+            patch=0
+          elif [ "$BUMP" = "minor" ]; then
+            minor=$((minor + 1))
+            patch=0
+          elif [ "$BUMP" = "patch" ]; then
+            patch=$((patch + 1))
+          fi
+          echo "new_version=${major}.${minor}.${patch}" >> $GITHUB_OUTPUT
+
+      - name: Run tests
+        if: false # Remove this line to enable tests again
+        env:
+          PYTHONPATH: ${{ github.workspace }}/packages
+          ENVIRONMENT: testing
+        run: poetry run pytest
+
+      - name: Check formatting
+        run: poetry run black . --check
+
+      - name: Free disk space on runner
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo docker image prune --all --force || true
+          df -h
+
+      - name: Build Docker Image
+        if: steps.version_increment.outputs.bump != 'none'
+        run: |
+          docker build \
+            -t ${{ vars.DOCKER_ARTIFACT_NAMESPACE }}/autoinvestor-${{ github.event.repository.name }}:${{ steps.calculate_version.outputs.new_version }} \
+            -t ${{ vars.DOCKER_ARTIFACT_NAMESPACE }}/autoinvestor-${{ github.event.repository.name }}:latest \
+            .
+
+      - name: Login into Artifact Registry
+        if: steps.version_increment.outputs.bump != 'none'
+        run: |
+          echo '${{ secrets.GCP_SA_KEY }}' | docker login \
+            --username _json_key \
+            --password-stdin \
+            ${{ vars.DOCKER_ARTIFACT_REGISTRY}}
+
+      - name: Push Docker Image
+        if: steps.version_increment.outputs.bump != 'none'
+        run: |
+          docker push ${{ vars.DOCKER_ARTIFACT_NAMESPACE }}/autoinvestor-${{ github.event.repository.name }}:${{ steps.calculate_version.outputs.new_version }}
+          docker push ${{ vars.DOCKER_ARTIFACT_NAMESPACE }}/autoinvestor-${{ github.event.repository.name }}:latest
+
+      - name: Create GitHub Release
+        if: steps.version_increment.outputs.bump != 'none'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ steps.calculate_version.outputs.new_version }}"
+          git push origin "${{ steps.calculate_version.outputs.new_version }}"
+
+  update-cd-repo:
+    uses: AutoInvestor/infra-gitops/.github/workflows/update-version.yml@main
+    needs: build_test_release
+    if: needs.build_test_release.outputs.new-version != ''
+    with:
+      image: autoinvestor-market-feeling
+      version: ${{ needs.build_test_release.outputs.new-version }}
+    secrets: inherit
