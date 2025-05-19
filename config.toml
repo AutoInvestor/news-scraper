@@ -1,0 +1,13 @@
+[server]
+host = "0.0.0.0"
+port = 8000
+
+[app]
+# default mode; can be overridden via ENVIRONMENT env-var or .env
+environment   = "production"
+
+# non-sensitive defaults
+mongodb_db    = "news_scraper"
+gcp_project   = "autoinvestor-tfm"
+pubsub_topic  = "news-scraper-events"
+pubsub_subscription  = "news-scraper-to-core"
