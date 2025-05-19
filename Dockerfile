@@ -6,7 +6,7 @@ ENV PYTHONUNBUFFERED=1 \
     POETRY_NO_INTERACTION=1 \
     POETRY_HOME=/opt/poetry \
     PATH="/opt/poetry/bin:$PATH" \
-    PYTHONPATH="/app/packages"
+    PYTHONPATH="/app/src"
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends gcc build-essential curl && \
@@ -29,13 +29,13 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends libgomp1 \
  && rm -rf /var/lib/apt/lists/*
 
-ENV PYTHONUNBUFFERED=1 PYTHONPATH="/app/packages"
+ENV PYTHONUNBUFFERED=1 PYTHONPATH="/app/src"
 
 WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.11/site-packages \
                      /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
-COPY packages ./packages
+COPY src ./src
 COPY --from=builder /app/models /app/models
 
 # Kubernetes will override these with the real secrets via env.
@@ -45,4 +45,4 @@ ENV GCP_PROJECT="" \
     MONGODB_DB=""
 
 EXPOSE 8080
-CMD ["python", "-m", "uvicorn", "stock_api.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]

@@ -74,9 +74,8 @@ jobs:
           echo "new_version=${major}.${minor}.${patch}" >> $GITHUB_OUTPUT
 
       - name: Run tests
-        if: false # Remove this line to enable tests again
         env:
-          PYTHONPATH: ${{ github.workspace }}/packages
+          PYTHONPATH: ${{ github.workspace }}/src
           ENVIRONMENT: testing
         run: poetry run pytest
 
