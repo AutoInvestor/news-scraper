@@ -124,6 +124,6 @@ jobs:
     needs: build_test_release
     if: needs.build_test_release.outputs.new-version != ''
     with:
-      image: autoinvestor-market-feeling
+      image: autoinvestor-news-scraper
       version: ${{ needs.build_test_release.outputs.new-version }}
     secrets: inherit

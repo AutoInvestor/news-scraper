@@ -35,7 +35,7 @@ class Settings(BaseSettings):
         env="MONGODB_URI",
     )
     MONGODB_DB: str = Field(
-        _toml.get("app", {}).get("mongodb_db", "market_feeling"),
+        _toml.get("app", {}).get("mongodb_db", "news_scraper"),
         env="MONGODB_DB",
     )
 
