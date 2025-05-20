@@ -19,8 +19,6 @@ COPY pyproject.toml poetry.lock* ./
 RUN poetry install --only main --no-root && \
     rm -rf ~/.cache/pypoetry ~/.cache/pip
 
-COPY models ./models
-
 ########################  Runtime  ########################
 FROM python:3.11-slim
 
@@ -36,7 +34,6 @@ COPY --from=builder /usr/local/lib/python3.11/site-packages \
                      /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY src ./src
-COPY --from=builder /app/models /app/models
 
 # Kubernetes will override these with the real secrets via env.
 ENV GCP_PROJECT="" \
